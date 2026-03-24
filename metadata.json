@@ -1,0 +1,5 @@
+{
+  "name": "OCR Pro - Rasmdan Matnga",
+  "description": "Rasmlardagi matnni sun'iy intellekt yordamida ajratib oluvchi va Word formatiga o'tkazuvchi vosita.",
+  "requestFramePermissions": ["camera"]
+}

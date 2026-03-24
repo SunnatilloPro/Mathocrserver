@@ -1,0 +1,34 @@
+{
+  "homepage": "https://SunnatilloPro.github.io/Math/",
+  "name": "ocr-pro---rasmdan-matnga",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "lint": "tsc",
+    "preview": "vite preview",
+    "predeploy": "npm run dev",
+    "deploy": "gh-pages -d dist "
+    
+  },
+  "dependencies": {
+    "@google/genai": "^1.42.0",
+    "katex": "^0.16.28",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "react-markdown": "^10.1.0",
+    "rehype-katex": "^7.0.1",
+    "rehype-raw": "^7.0.0",
+    "remark-gfm": "^4.0.1",
+    "remark-math": "^6.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "gh-pages": "^6.3.0",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.0"
+  }
+}
