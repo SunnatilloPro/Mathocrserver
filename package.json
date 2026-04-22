@@ -10,12 +10,16 @@
     "lint": "tsc",
     "preview": "vite preview",
     "predeploy": "npm run dev",
-    "deploy": "gh-pages -d dist "
-    
+    "deploy": "gh-pages -d dist ",
+    "server": "node server/server.js"
   },
   "dependencies": {
     "@google/genai": "^1.42.0",
+    "cors": "^2.8.6",
+    "dotenv": "^16.6.1",
+    "express": "^5.2.1",
     "katex": "^0.16.28",
+    "mongoose": "^9.4.1",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-markdown": "^10.1.0",

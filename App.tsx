@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { extractTextFromImage } from './services/geminiService';
 import { ImageUploader } from './components/ImageUploader';
 import { TextDisplay } from './components/TextDisplay';
+import { AdminPage } from './components/AdminPage';
 import { ImageFile, ExtractedData } from './types';
 
 declare global {
@@ -13,7 +14,42 @@ declare global {
   }
 }
 
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+
+// Save result to MongoDB
+const saveResultToDb = async (text: string, imagePreview: string) => {
+  try {
+    await fetch(`${API_BASE}/api/results`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text,
+        imagePreview,
+        userAgent: navigator.userAgent
+      })
+    });
+  } catch (err) {
+    console.warn('MongoDB ga saqlashda xatolik:', err);
+  }
+};
+
+// Simple pathname router
+const useRoute = () => {
+  const [route, setRoute] = useState(window.location.pathname);
+  
+  useEffect(() => {
+    const handlePopState = () => {
+      setRoute(window.location.pathname);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  return route;
+};
+
 const App: React.FC = () => {
+  const route = useRoute();
   const [image, setImage] = useState<ImageFile | null>(null);
   const [extractedData, setExtractedData] = useState<ExtractedData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -162,6 +198,24 @@ const App: React.FC = () => {
         text,
         timestamp: Date.now()
       });
+
+      // Save to MongoDB (create smaller thumbnail for storage)
+      const thumbCanvas = document.createElement('canvas');
+      const thumbCtx = thumbCanvas.getContext('2d');
+      const thumbImg = new Image();
+      thumbImg.src = image.preview;
+      thumbImg.onload = () => {
+        const maxThumb = 200;
+        let tw = thumbImg.width;
+        let th = thumbImg.height;
+        if (tw > th) { th = th * maxThumb / tw; tw = maxThumb; }
+        else { tw = tw * maxThumb / th; th = maxThumb; }
+        thumbCanvas.width = tw;
+        thumbCanvas.height = th;
+        thumbCtx?.drawImage(thumbImg, 0, 0, tw, th);
+        const thumbnail = thumbCanvas.toDataURL('image/jpeg', 0.5);
+        saveResultToDb(text, thumbnail);
+      };
     } catch (err: any) {
       const msg = err.message || "";
       console.error("Processing error:", err);
@@ -182,6 +236,12 @@ const App: React.FC = () => {
     setError(null);
   };
 
+  // Route: Admin page
+  if (route === '/admin') {
+    return <AdminPage />;
+  }
+
+  // Route: Main OCR page
   return (
     <div className="flex flex-col h-full bg-slate-50 overflow-y-auto">
       {/* Header */}
