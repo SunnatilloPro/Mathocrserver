@@ -155,23 +155,23 @@ export const TextDisplay: React.FC<TextDisplayProps> = ({ text, onReset }) => {
   };
 
   return (
-    <div className="flex flex-col h-full bg-white rounded-3xl shadow-[0_8px_40px_rgba(0,0,0,0.04)] border border-slate-100 overflow-hidden relative">
-      <div className="bg-slate-50/50 backdrop-blur-md border-b border-slate-100 px-5 py-4 flex justify-between items-center sticky top-0 z-10">
-        <h3 className="font-heading font-bold text-slate-900 flex items-center gap-2 text-base sm:text-lg">
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" className="text-slate-900" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+    <div className="flex flex-col h-full bg-white rounded-3xl shadow-[0_8px_40px_rgba(0,0,0,0.04)] border border-zinc-100 overflow-hidden relative">
+      <div className="bg-zinc-50/50 backdrop-blur-md border-b border-zinc-100 px-5 py-4 flex justify-between items-center sticky top-0 z-10">
+        <h3 className="font-heading font-bold text-zinc-900 flex items-center gap-2 text-base sm:text-lg">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" className="text-zinc-900" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
           Natija
         </h3>
         <div className="flex gap-2">
           <button 
             onClick={handleCopy}
-            className="p-2 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-all"
+            className="p-2 text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 rounded-xl transition-all"
             title="Nusxa olish"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
           </button>
           <button 
             onClick={onReset}
-            className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+            className="p-2 text-zinc-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
             title="Yopish"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
@@ -179,7 +179,7 @@ export const TextDisplay: React.FC<TextDisplayProps> = ({ text, onReset }) => {
         </div>
       </div>
       
-      <div className="flex-1 p-5 sm:p-8 overflow-y-auto markdown-body text-sm sm:text-base font-sans leading-relaxed text-slate-700" ref={contentRef}>
+      <div className="flex-1 p-5 sm:p-8 overflow-y-auto markdown-body text-sm sm:text-base font-sans leading-relaxed text-zinc-700" ref={contentRef}>
         <ReactMarkdown 
           remarkPlugins={[remarkMath, remarkGfm]} 
           rehypePlugins={[rehypeKatex, rehypeRaw]}
@@ -192,7 +192,7 @@ export const TextDisplay: React.FC<TextDisplayProps> = ({ text, onReset }) => {
               if (!inline && language === 'svg') {
                 return (
                   <div 
-                    className="my-6 flex justify-center bg-slate-50 p-6 rounded-2xl border border-slate-100 shadow-sm"
+                    className="my-6 flex justify-center bg-zinc-50 p-6 rounded-2xl border border-zinc-100 shadow-sm"
                     dangerouslySetInnerHTML={{ __html: value }} 
                   />
                 );
@@ -209,17 +209,17 @@ export const TextDisplay: React.FC<TextDisplayProps> = ({ text, onReset }) => {
         </ReactMarkdown>
       </div>
 
-      <div className="bg-white border-t border-slate-100 p-4 sm:p-5 flex gap-3 flex-wrap sticky bottom-0 z-10 shadow-[0_-4px_20px_rgba(0,0,0,0.02)]">
+      <div className="bg-white border-t border-zinc-100 p-4 sm:p-5 flex gap-3 flex-wrap sticky bottom-0 z-10 shadow-[0_-4px_20px_rgba(0,0,0,0.02)]">
         <button 
           onClick={handleDownloadWord}
-          className="flex-1 flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 text-white py-3 px-5 rounded-2xl text-sm font-semibold transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5"
+          className="flex-1 flex items-center justify-center gap-2 bg-zinc-900 hover:bg-zinc-800 text-white py-3 px-5 rounded-2xl text-sm font-semibold transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="M12 18v-6"/><path d="M9 15l3 3 3-3"/></svg>
           Word (.doc)
         </button>
         <button 
           onClick={handleDownloadTxt}
-          className="flex-1 flex items-center justify-center gap-2 bg-white border-2 border-slate-200 hover:border-slate-900 hover:text-slate-900 text-slate-600 py-3 px-5 rounded-2xl text-sm font-semibold transition-all hover:-translate-y-0.5"
+          className="flex-1 flex items-center justify-center gap-2 bg-white border-2 border-zinc-200 hover:border-zinc-900 hover:text-zinc-900 text-zinc-600 py-3 px-5 rounded-2xl text-sm font-semibold transition-all hover:-translate-y-0.5"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
           Text (.txt)
