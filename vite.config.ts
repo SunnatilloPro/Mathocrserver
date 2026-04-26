@@ -6,6 +6,7 @@ export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', '');
     return {
       appType: 'spa',
+      base: '/Mathocr/',
       server: {
         port: 3000,
         host: '0.0.0.0',
@@ -13,7 +14,11 @@ export default defineConfig(({ mode }) => {
       plugins: [react()],
       define: {
         'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-        'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)
+        'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
+        ...Object.keys(env).filter(k => k.startsWith('GEMINI_API_KEY_')).reduce((acc, k) => {
+          acc[`process.env.${k}`] = JSON.stringify(env[k]);
+          return acc;
+        }, {} as Record<string, string>)
       },
       resolve: {
         alias: {
