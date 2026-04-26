@@ -1,8 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { extractTextFromImage } from './services/geminiService';
 import { ImageUploader } from './components/ImageUploader';
 import { TextDisplay } from './components/TextDisplay';
-import { AdminPage } from './components/AdminPage';
 import { ImageFile, ExtractedData } from './types';
 
 declare global {
@@ -14,97 +13,63 @@ declare global {
   }
 }
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const API_BASE = (import.meta as any).env.VITE_API_URL || 'http://localhost:3001';
 
-// Get or create a unique user ID
-const getUserId = (): string => {
-  let uid = localStorage.getItem('ocr-user-id');
-  if (!uid) {
-    uid = 'user_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
-    localStorage.setItem('ocr-user-id', uid);
-  }
-  return uid;
-};
-
-// Save result to MongoDB
-const saveResultToDb = async (text: string, imagePreview: string) => {
+const sendResultToBackend = async (text: string, imagePreview: string): Promise<void> => {
   try {
-    const userId = getUserId();
     await fetch(`${API_BASE}/api/results`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        text,
-        imagePreview,
-        userAgent: navigator.userAgent,
-        userId
-      })
+      body: JSON.stringify({ text, imagePreview })
     });
   } catch (err) {
-    console.warn('MongoDB ga saqlashda xatolik:', err);
+    console.warn('Backendga yuborishda xatolik:', err);
   }
 };
 
-// Simple pathname router
-const useRoute = () => {
-  const [route, setRoute] = useState(window.location.pathname);
-  
-  useEffect(() => {
-    const handlePopState = () => {
-      setRoute(window.location.pathname);
-    };
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
-
-  return route;
-};
-
-interface HistoryResult {
-  _id: string;
-  text: string;
-  imagePreview: string;
-  createdAt: string;
-}
-
 const App: React.FC = () => {
-  const route = useRoute();
-  const [image, setImage] = useState<ImageFile | null>(null);
+  const [images, setImages] = useState<ImageFile[]>([]);
+  const [activeIndex, setActiveIndex] = useState(0);
   const [extractedData, setExtractedData] = useState<ExtractedData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [processingIndex, setProcessingIndex] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [showInstallModal, setShowInstallModal] = useState(false);
-  const [history, setHistory] = useState<HistoryResult[]>([]);
-  const [showHistory, setShowHistory] = useState(false);
-  const [selectedHistory, setSelectedHistory] = useState<HistoryResult | null>(null);
+
+  // Global paste handler — Ctrl+V har qanday holatda ishlaydi
+  useEffect(() => {
+    const handleGlobalPaste = (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      const files: File[] = [];
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.startsWith('image/')) {
+          const file = items[i].getAsFile();
+          if (file) files.push(file);
+        }
+      }
+      if (files.length > 0) handleImagesSelect(files);
+    };
+    window.addEventListener('paste', handleGlobalPaste);
+    return () => window.removeEventListener('paste', handleGlobalPaste);
+  }, [images]); // images dependency — har yangi rasm qo'shilganda yangilanadi
 
   useEffect(() => {
-    // Check if app is already installed (standalone mode)
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
-    if (isStandalone) {
-      localStorage.setItem('ocr-pro-installed', 'true');
-    }
 
     const handleBeforeInstallPrompt = (e: any) => {
       e.preventDefault();
       setDeferredPrompt(e);
     };
 
-    const handleAppInstalled = () => {
-      localStorage.setItem('ocr-pro-installed', 'true');
-      setShowInstallModal(false);
-    };
+    const handleAppInstalled = () => setShowInstallModal(false);
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     window.addEventListener('appinstalled', handleAppInstalled);
 
-    // Show modal after a short delay on first load if not already installed
     const timer = setTimeout(() => {
-      const alreadyInstalled = localStorage.getItem('ocr-pro-installed') === 'true';
-      if (!isStandalone && !alreadyInstalled) {
-        setShowInstallModal(true);
-      }
+      if (!isStandalone) setShowInstallModal(true);
     }, 2000);
 
     return () => {
@@ -114,36 +79,17 @@ const App: React.FC = () => {
     };
   }, []);
 
-  const fetchHistory = async () => {
-    try {
-      const userId = getUserId();
-      const res = await fetch(`${API_BASE}/api/results/user/${userId}`);
-      const data = await res.json();
-      if (data.success) setHistory(data.results);
-    } catch (err) {
-      console.warn('Tarixni yuklashda xatolik:', err);
-    }
-  };
-
-  const handleShowHistory = async () => {
-    setShowHistory(true);
-    await fetchHistory();
-  };
-
   const handleInstallClick = async () => {
     if (deferredPrompt) {
       deferredPrompt.prompt();
       const { outcome } = await deferredPrompt.userChoice;
       if (outcome === 'accepted') {
-        localStorage.setItem('ocr-pro-installed', 'true');
         setDeferredPrompt(null);
         setShowInstallModal(false);
       }
     } else {
-      // If no prompt is available, it might be iOS or already installed
       const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
       if (isStandalone) {
-        localStorage.setItem('ocr-pro-installed', 'true');
         alert("Ilova allaqachon o'rnatilgan.");
       } else {
         alert("Ilovani o'rnatish uchun brauzer menyusidan 'Asosiy ekranga qo'shish' bandini tanlang.");
@@ -161,47 +107,22 @@ const App: React.FC = () => {
         img.src = event.target?.result as string;
         img.onload = () => {
           const canvas = document.createElement('canvas');
-          const MAX_WIDTH = 1536; // Limit width to 1.5K for performance
-          const MAX_HEIGHT = 1536;
-          let width = img.width;
-          let height = img.height;
+          const MAX = 1536;
+          let w = img.width, h = img.height;
+          if (w > h) { if (w > MAX) { h = h * MAX / w; w = MAX; } }
+          else { if (h > MAX) { w = w * MAX / h; h = MAX; } }
 
-          // Calculate new dimensions while maintaining aspect ratio
-          if (width > height) {
-            if (width > MAX_WIDTH) {
-              height *= MAX_WIDTH / width;
-              width = MAX_WIDTH;
-            }
-          } else {
-            if (height > MAX_HEIGHT) {
-              width *= MAX_HEIGHT / height;
-              height = MAX_HEIGHT;
-            }
-          }
-
-          canvas.width = width;
-          canvas.height = height;
+          canvas.width = w;
+          canvas.height = h;
           const ctx = canvas.getContext('2d');
-          if (!ctx) {
-            reject(new Error("Canvas context error"));
-            return;
-          }
-          ctx.drawImage(img, 0, 0, width, height);
-          
-          // Determine mime type, default to jpeg for better compression if needed
-          let mimeType = file.type;
-          if (mimeType !== 'image/png' && mimeType !== 'image/webp') {
-             mimeType = 'image/jpeg';
-          }
+          if (!ctx) { reject(new Error("Canvas context error")); return; }
+          ctx.drawImage(img, 0, 0, w, h);
 
-          // Compress to 0.8 quality
+          let mimeType = file.type;
+          if (mimeType !== 'image/png' && mimeType !== 'image/webp') mimeType = 'image/jpeg';
+
           const dataUrl = canvas.toDataURL(mimeType, 0.8);
-          
-          resolve({
-            data: dataUrl,
-            mimeType: mimeType,
-            preview: dataUrl
-          });
+          resolve({ data: dataUrl, mimeType, preview: dataUrl });
         };
         img.onerror = () => reject(new Error("Rasmni yuklashda xatolik"));
       };
@@ -209,54 +130,101 @@ const App: React.FC = () => {
     });
   };
 
-  const handleImageSelect = async (file: File) => {
+  const handleImagesSelect = async (files: File[]) => {
     try {
       setIsLoading(true);
       setError(null);
-      const processedImage = await processImage(file);
-      setImage(processedImage);
+
+      // Fayllarni raqamli (natural) tartibda saralash
+      // Masalan: 1.jpg, 2.jpg, 10.jpg — to'g'ri tartib
+      const sortedFiles = [...files].sort((a, b) =>
+        a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
+      );
+
+      const processed = await Promise.all(sortedFiles.map(f => processImage(f)));
+      const newStartIndex = images.length; // capture before update
+      setImages(prev => [...prev, ...processed]);
+      setActiveIndex(newStartIndex); // first newly added image becomes active
       setExtractedData(null);
     } catch (err: any) {
-      setError(err.message || "Rasmni qayta ishlashda xatolik");
+      setError(err?.message || "Rasmni qayta ishlashda xatolik");
     } finally {
       setIsLoading(false);
     }
   };
 
+  const handleRemoveImage = (idx: number) => {
+    setImages(prev => {
+      const next = prev.filter((_, i) => i !== idx);
+      setActiveIndex(Math.min(idx, next.length - 1));
+      return next;
+    });
+    setExtractedData(null);
+    setError(null);
+  };
+
+  /**
+   * Rasm OCR matnidan birinchi aniq raqamni topadi.
+   * "1-variant", "№2", "Variant 3", "10.", "1)" kabi formatlarni qo'llab-quvvatlaydi.
+   * Raqam topilmasa Infinity qaytaradi (tartiblashda oxiriga o'tadi).
+   */
+  const extractNumberFromText = (text: string): number => {
+    // Ustuvorlik tartibi bo'yicha izlash:
+    // 1. "1-variant", "1 variant", "variant 1", "1)" , "1.", "№1", "#1"
+    const patterns = [
+      /(?:variant|варіант|варіант|v\.?)\s*[:\-]?\s*(\d+)/i,  // variant 1
+      /(\d+)\s*[-–]\s*(?:variant|топшириқ|задание)/i,           // 1-variant
+      /[№#]\s*(\d+)/,                                             // №1, #1
+      /^(\d+)[.)]\s/m,                                            // "1. " yoki "1) " qator boshi
+      /(\d+)/,                                                    // Xohlagan birinchi raqam
+    ];
+    for (const pattern of patterns) {
+      const match = text.match(pattern);
+      if (match) return parseInt(match[1] || match[0], 10);
+    }
+    return Infinity;
+  };
+
   const handleConvert = async () => {
-    if (!image) return;
+    if (images.length === 0) return;
 
     setIsLoading(true);
     setError(null);
+    setExtractedData(null);
 
     try {
-      const text = await extractTextFromImage(image.data, image.mimeType);
-      setExtractedData({
-        text,
-        timestamp: Date.now()
+      // { originalIndex, text, sortKey } saqlaymiz
+      const results: { originalIndex: number; text: string; sortKey: number }[] = [];
+
+      for (let i = 0; i < images.length; i++) {
+        setProcessingIndex(i);
+        const img = images[i];
+        const text = await extractTextFromImage(img.data, img.mimeType);
+        results.push({ originalIndex: i, text, sortKey: Infinity });
+      }
+
+      // Har bir natijadan raqam topamiz
+      for (const item of results) {
+        item.sortKey = extractNumberFromText(item.text);
+      }
+
+      // Raqam bo'yicha saralash (raqam yo'q bo'lsa — original tartib)
+      results.sort((a, b) => {
+        if (a.sortKey !== b.sortKey) return a.sortKey - b.sortKey;
+        return a.originalIndex - b.originalIndex; // teng raqamda asl tartib
       });
 
-      // Save to MongoDB (create smaller thumbnail for storage)
-      const thumbCanvas = document.createElement('canvas');
-      const thumbCtx = thumbCanvas.getContext('2d');
-      const thumbImg = new Image();
-      thumbImg.src = image.preview;
-      thumbImg.onload = () => {
-        const maxThumb = 200;
-        let tw = thumbImg.width;
-        let th = thumbImg.height;
-        if (tw > th) { th = th * maxThumb / tw; tw = maxThumb; }
-        else { tw = tw * maxThumb / th; th = maxThumb; }
-        thumbCanvas.width = tw;
-        thumbCanvas.height = th;
-        thumbCtx?.drawImage(thumbImg, 0, 0, tw, th);
-        const thumbnail = thumbCanvas.toDataURL('image/jpeg', 0.5);
-        saveResultToDb(text, thumbnail);
-      };
+      setProcessingIndex(null);
+      const combinedText = results.map(r => r.text).join('\n\n---\n\n');
+      setExtractedData({ text: combinedText, timestamp: Date.now() });
+
+      // Send first image as thumbnail to backend
+      sendResultToBackend(combinedText, images[0].preview);
     } catch (err: any) {
-      const msg = err.message || "";
+      setProcessingIndex(null);
+      const msg = err?.message || "";
       console.error("Processing error:", err);
-      
+
       if (msg.includes("429") || msg.includes("quota") || msg.includes("limit") || msg.includes("RESOURCE_EXHAUSTED")) {
         setError("API limiti tugadi. Iltimos, birozdan so'ng qayta urinib ko'ring.");
       } else {
@@ -268,17 +236,12 @@ const App: React.FC = () => {
   };
 
   const handleReset = () => {
-    setImage(null);
+    setImages([]);
+    setActiveIndex(0);
     setExtractedData(null);
     setError(null);
   };
 
-  // Route: Admin page
-  if (route === '/admin') {
-    return <AdminPage />;
-  }
-
-  // Route: Main OCR page
   return (
     <div className="flex flex-col h-full bg-slate-50 overflow-y-auto">
       {/* Header */}
@@ -289,26 +252,11 @@ const App: React.FC = () => {
           </div>
           <h1 className="text-lg sm:text-xl font-bold text-slate-800 tracking-tight">OCR Pro</h1>
         </div>
-        
-        <div className="flex items-center gap-2 sm:gap-4">
-          <button
-            onClick={handleShowHistory}
-            style={{
-              display: 'flex', alignItems: 'center', gap: '6px',
-              background: 'none', border: '1px solid #e2e8f0',
-              borderRadius: '10px', padding: '6px 14px',
-              fontSize: '14px', color: '#4f46e5', cursor: 'pointer',
-              fontWeight: 600, transition: 'background 0.2s'
-            }}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-            Tarixim
-          </button>
-        </div>
+        <div className="flex items-center gap-2 sm:gap-4"></div>
       </header>
 
       <main className="flex-1 w-full max-w-5xl mx-auto p-3 sm:p-4 md:p-8">
-        {!image ? (
+        {images.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center animate-[fadeIn_0.5s_ease-out] py-4">
             <div className="text-center mb-6 sm:mb-8 max-w-lg px-2">
               <h2 className="text-2xl sm:text-3xl font-bold text-slate-800 mb-2 sm:mb-3">Rasmdan Matnga</h2>
@@ -317,63 +265,117 @@ const App: React.FC = () => {
               </p>
             </div>
             <div className="w-full max-w-xl">
-              <ImageUploader onImageSelect={handleImageSelect} />
+              <ImageUploader onImagesSelect={handleImagesSelect} />
               {isLoading && <p className="text-center text-sm text-slate-500 mt-4">Rasm yuklanmoqda...</p>}
-              
             </div>
           </div>
         ) : (
           <div className="flex flex-col lg:flex-row gap-4 sm:gap-6 h-full items-start">
             {/* Left Side: Image Preview */}
             <div className="w-full lg:w-1/2 flex flex-col gap-3 sm:gap-4">
+
+              {/* Active image */}
               <div className="bg-white p-1.5 sm:p-2 rounded-2xl border border-slate-200 shadow-sm relative group">
-                 <img 
-                  src={image.preview} 
-                  alt="Selected" 
-                  className="w-full h-auto max-h-[50vh] sm:max-h-[60vh] object-contain rounded-xl bg-slate-100/50" 
+                <img
+                  src={images[activeIndex]?.preview}
+                  alt="Selected"
+                  className="w-full h-auto max-h-[50vh] sm:max-h-[55vh] object-contain rounded-xl bg-slate-100/50"
                 />
-                <button 
-                  onClick={handleReset}
-                  className="absolute top-3 right-3 sm:top-4 sm:right-4 bg-white/90 backdrop-blur-sm p-1.5 sm:p-2 rounded-full shadow-sm border border-slate-200 text-slate-600 hover:text-red-500 transition-colors sm:opacity-0 sm:group-hover:opacity-100"
+                <button
+                  onClick={() => handleRemoveImage(activeIndex)}
+                  className="absolute top-3 right-3 sm:top-4 sm:right-4 bg-white/90 backdrop-blur-sm p-1.5 sm:p-2 rounded-full shadow-sm border border-slate-200 text-slate-600 hover:text-red-500 transition-colors"
+                  title="Rasmni o'chirish"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" className="sm:w-[18px] sm:h-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                 </button>
               </div>
-              
+
+              {/* Thumbnail strip - har doim ko'rinadi (+ tugmasi ham) */}
+              <div className="flex gap-2 flex-wrap items-center">
+                  {images.map((img, idx) => (
+                    <div
+                      key={idx}
+                      onClick={() => setActiveIndex(idx)}
+                      className={`relative cursor-pointer rounded-xl overflow-hidden border-2 transition-all ${activeIndex === idx ? 'border-indigo-500 shadow-md' : 'border-slate-200 hover:border-indigo-300'}`}
+                      style={{ width: 64, height: 64 }}
+                    >
+                      <img src={img.preview} alt={`Rasm ${idx + 1}`} className="w-full h-full object-cover" />
+                      {/* Processing indicator */}
+                      {isLoading && processingIndex === idx && (
+                        <div className="absolute inset-0 bg-indigo-600/60 flex items-center justify-center rounded-xl">
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        </div>
+                      )}
+                      {/* Done indicator */}
+                      {processingIndex !== null && processingIndex > idx && (
+                        <div className="absolute inset-0 bg-green-500/50 flex items-center justify-center rounded-xl">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                        </div>
+                      )}
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleRemoveImage(idx); }}
+                        className="absolute top-0.5 right-0.5 bg-white/80 rounded-full p-0.5 text-slate-500 hover:text-red-500"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                      </button>
+                    </div>
+                  ))}
+                  {/* Rasm qo'shish tugmasi - HAR DOIM ko'rinadi */}
+                  <label className="cursor-pointer w-16 h-16 rounded-xl border-2 border-dashed border-indigo-300 hover:border-indigo-500 bg-indigo-50 hover:bg-indigo-100 flex flex-col items-center justify-center text-indigo-400 hover:text-indigo-600 transition-all gap-0.5">
+                    <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => {
+                      const files = Array.from(e.target.files || []).filter(f => f.type.startsWith('image/'));
+                      if (files.length > 0) handleImagesSelect(files);
+                      e.target.value = '';
+                    }} />
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    <span className="text-[9px] font-medium">Qo'sh</span>
+                  </label>
+                </div>
+
+
               {!extractedData && !isLoading && (
-                <button 
+                <button
                   onClick={handleConvert}
                   className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 sm:py-3.5 px-6 rounded-xl shadow-lg shadow-indigo-200 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" className="sm:w-5 sm:h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72Z"/><path d="m14 7 3 3"/><path d="M5 6v4"/><path d="M19 14v4"/><path d="M10 2v2"/><path d="M7 8H3"/><path d="M21 16h-4"/><path d="M11 3H9"/></svg>
-                  Matnni Ajratish
+                  {images.length > 1 ? `${images.length} ta rasmni Ajratish` : 'Matnni Ajratish'}
                 </button>
               )}
 
               {isLoading && (
-                 <div className="w-full bg-white p-4 sm:p-6 rounded-xl border border-slate-200 shadow-sm text-center">
-                    <div className="inline-block w-6 h-6 sm:w-8 sm:h-8 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mb-2 sm:mb-3"></div>
-                    <p className="text-sm sm:text-base text-slate-600 font-medium animate-pulse">
-                      Tahlil qilinmoqda...
-                      <br/>
-                      <span className="text-[10px] sm:text-xs text-slate-400 font-normal">Murakkab matnlar uchun biroz vaqt ketishi mumkin</span>
-                    </p>
-                 </div>
-              )}
-              
-              {error && (
-                <div className="w-full bg-red-50 border border-red-100 text-red-600 p-3 sm:p-4 rounded-xl flex items-center gap-2 sm:gap-3 text-sm sm:text-base">
-                   <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" className="sm:w-5 sm:h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                   {error}
+                <div className="w-full bg-white p-4 sm:p-6 rounded-xl border border-slate-200 shadow-sm text-center">
+                  <div className="inline-block w-6 h-6 sm:w-8 sm:h-8 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mb-2 sm:mb-3"></div>
+                  <p className="text-sm sm:text-base text-slate-600 font-medium animate-pulse">
+                    {images.length > 1
+                      ? `Tahlil qilinmoqda... (${(processingIndex ?? 0) + 1}/${images.length})`
+                      : 'Tahlil qilinmoqda...'}
+                    <br/>
+                    <span className="text-[10px] sm:text-xs text-slate-400 font-normal">Murakkab matnlar uchun biroz vaqt ketishi mumkin</span>
+                  </p>
                 </div>
               )}
+
+              {error && (
+                <div className="w-full bg-red-50 border border-red-100 text-red-600 p-3 sm:p-4 rounded-xl flex items-center gap-2 sm:gap-3 text-sm sm:text-base">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" className="sm:w-5 sm:h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                  {error}
+                </div>
+              )}
+
+              <button
+                onClick={handleReset}
+                className="text-slate-400 hover:text-slate-600 text-sm text-center py-1 transition-colors"
+              >
+                ← Boshidan boshlash
+              </button>
             </div>
 
             {/* Right Side: Result */}
             {extractedData && (
               <div className="w-full lg:w-1/2 min-h-[400px] lg:h-[600px]">
-                <TextDisplay 
-                  text={extractedData.text} 
+                <TextDisplay
+                  text={extractedData.text}
                   onReset={handleReset}
                 />
               </div>
@@ -397,16 +399,13 @@ const App: React.FC = () => {
                 Ilovadan qulayroq foydalanish uchun uni asosiy ekranga qo'shib oling.
               </p>
               <div className="flex flex-col gap-3">
-                <button 
-                  onClick={() => {
-                    handleInstallClick();
-                    setShowInstallModal(false);
-                  }}
+                <button
+                  onClick={() => { handleInstallClick(); setShowInstallModal(false); }}
                   className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold text-lg hover:bg-indigo-700 transition-all active:scale-[0.98] shadow-lg shadow-indigo-200"
                 >
                   O'rnatish
                 </button>
-                <button 
+                <button
                   onClick={() => setShowInstallModal(false)}
                   className="w-full py-3 text-slate-400 font-medium hover:text-slate-600 transition-colors"
                 >
@@ -414,85 +413,6 @@ const App: React.FC = () => {
                 </button>
               </div>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* User History Modal */}
-      {showHistory && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 50,
-          background: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(4px)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px'
-        }}>
-          <div style={{
-            background: '#fff', borderRadius: '24px', width: '100%', maxWidth: '600px',
-            maxHeight: '80vh', display: 'flex', flexDirection: 'column',
-            boxShadow: '0 25px 50px rgba(0,0,0,0.2)', overflow: 'hidden'
-          }}>
-            {/* Modal Header */}
-            <div style={{ padding: '20px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#1e293b', margin: 0 }}>📋 Mening Tarixim</h2>
-              <button onClick={() => { setShowHistory(false); setSelectedHistory(null); }}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: '22px' }}>✕</button>
-            </div>
-
-            {selectedHistory ? (
-              // Detail view
-              <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
-                <button onClick={() => setSelectedHistory(null)}
-                  style={{ background: '#f1f5f9', border: 'none', borderRadius: '8px', padding: '8px 14px', cursor: 'pointer', marginBottom: '16px', color: '#4f46e5', fontWeight: 600, fontSize: '13px' }}>
-                  ← Ortga
-                </button>
-                {selectedHistory.imagePreview && (
-                  <img src={selectedHistory.imagePreview} alt="preview" style={{ width: '100%', borderRadius: '12px', marginBottom: '16px', objectFit: 'contain', maxHeight: '200px', background: '#f8fafc' }} />
-                )}
-                <div style={{ background: '#f8fafc', borderRadius: '12px', padding: '16px', fontSize: '14px', color: '#334155', whiteSpace: 'pre-wrap', lineHeight: 1.7 }}>
-                  {selectedHistory.text}
-                </div>
-              </div>
-            ) : (
-              // List view
-              <div style={{ flex: 1, overflowY: 'auto', padding: '12px' }}>
-                {history.length === 0 ? (
-                  <div style={{ textAlign: 'center', padding: '48px 24px', color: '#94a3b8' }}>
-                    <div style={{ fontSize: '48px', marginBottom: '12px' }}>🗂️</div>
-                    <p style={{ fontSize: '15px' }}>Hozircha hech qanday tarix yo'q.</p>
-                    <p style={{ fontSize: '13px', marginTop: '6px' }}>Rasm yuklang va matn ajrating!</p>
-                  </div>
-                ) : (
-                  history.map((item) => (
-                    <div key={item._id}
-                      onClick={() => setSelectedHistory(item)}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: '12px',
-                        padding: '12px', borderRadius: '14px', marginBottom: '8px',
-                        cursor: 'pointer', border: '1px solid #e2e8f0',
-                        transition: 'background 0.15s', background: '#fafafa'
-                      }}
-                      onMouseEnter={e => (e.currentTarget.style.background = '#f1f5f9')}
-                      onMouseLeave={e => (e.currentTarget.style.background = '#fafafa')}
-                    >
-                      {item.imagePreview ? (
-                        <img src={item.imagePreview} alt="thumb" style={{ width: '56px', height: '56px', borderRadius: '10px', objectFit: 'cover', background: '#e2e8f0', flexShrink: 0 }} />
-                      ) : (
-                        <div style={{ width: '56px', height: '56px', borderRadius: '10px', background: '#e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', flexShrink: 0 }}>📄</div>
-                      )}
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <p style={{ margin: 0, fontSize: '14px', color: '#334155', fontWeight: 500,
-                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {item.text.slice(0, 80)}...
-                        </p>
-                        <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#94a3b8' }}>
-                          {new Date(item.createdAt).toLocaleDateString('uz-UZ', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                        </p>
-                      </div>
-                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-                    </div>
-                  ))
-                )}
-              </div>
-            )}
           </div>
         </div>
       )}

@@ -95,35 +95,50 @@ export const TextDisplay: React.FC<TextDisplayProps> = ({ text, onReset }) => {
 
     // Get the rendered HTML content from the modified clone
     const contentHtml = clone.innerHTML;
-    
     const header = `
-      <html xmlns:o='urn:schemas-microsoft-com:office:office' 
-            xmlns:w='urn:schemas-microsoft-com:office:word' 
+      <html xmlns:o='urn:schemas-microsoft-com:office:office'
+            xmlns:w='urn:schemas-microsoft-com:office:word'
             xmlns:m='http://schemas.microsoft.com/office/2004/12/omml'
+            xmlns:v='urn:schemas-microsoft-com:vml'
             xmlns='http://www.w3.org/TR/REC-html40'>
       <head>
         <meta charset='utf-8'>
         <title>OCR Natija</title>
-        <!--[if gte mso 9]>
-        <xml>
+        <!--[if gte mso 9]><xml>
+          <o:OfficeDocumentSettings><o:AllowPNG/></o:OfficeDocumentSettings>
           <w:WordDocument>
             <w:View>Print</w:View>
             <w:Zoom>100</w:Zoom>
             <w:DoNotOptimizeForBrowser/>
           </w:WordDocument>
-        </xml>
-        <![endif]-->
+        </xml><![endif]-->
         <style>
+          v\\:* {behavior:url(#default#VML);}
+          o\\:* {behavior:url(#default#VML);}
+          w\\:* {behavior:url(#default#VML);}
+          .shape {behavior:url(#default#VML);}
+
+          @page WordSection1 {
+            size: 8.27in 11.69in;
+            margin: 0.5in 0.5in 0.7in 0.5in;
+          }
+          div.WordSection1 {
+            page: WordSection1;
+          }
           body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 12pt; }
-          .katex-html { display: none; } /* Hide KaTeX HTML, let Word try to use MathML */
+          .katex-html { display: none; }
           .katex-mathml { display: block !important; }
-          table { border-collapse: collapse; width: 100%; }
-          td, th { border: 1px solid #ddd; padding: 8px; }
+          table.content-table { border-collapse: collapse; width: 100%; }
+          table.content-table td, table.content-table th { border: 1px solid #ddd; padding: 8px; }
           img { max-width: 100%; height: auto; display: block; margin: 10px auto; }
         </style>
       </head>
       <body>
-        ${contentHtml}
+
+          <!-- ===== ASOSIY KONTENT ===== -->
+          ${contentHtml.replace(/<table/g, '<table class="content-table"')}
+        </div>
+
       </body>
       </html>
     `;
