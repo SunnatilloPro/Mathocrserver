@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { Routes, Route } from 'react-router-dom';
+import Admin from './pages/Admin';
 import { extractTextFromImage } from './services/geminiService';
 import { ImageUploader } from './components/ImageUploader';
 import { TextDisplay } from './components/TextDisplay';
@@ -27,7 +29,7 @@ const sendResultToBackend = async (text: string, imagePreview: string): Promise<
   }
 };
 
-const App: React.FC = () => {
+const Home: React.FC = () => {
   const [image, setImage] = useState<ImageFile | null>(null);
   const [extractedData, setExtractedData] = useState<ExtractedData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -105,7 +107,7 @@ const App: React.FC = () => {
         img.src = event.target?.result as string;
         img.onload = () => {
           const canvas = document.createElement('canvas');
-          const MAX = 1536;
+          const MAX = 2560;
           let w = img.width, h = img.height;
           if (w > h) { if (w > MAX) { h = h * MAX / w; w = MAX; } }
           else { if (h > MAX) { w = w * MAX / h; h = MAX; } }
@@ -119,7 +121,7 @@ const App: React.FC = () => {
           let mimeType = file.type;
           if (mimeType !== 'image/png' && mimeType !== 'image/webp') mimeType = 'image/jpeg';
 
-          const dataUrl = canvas.toDataURL(mimeType, 0.8);
+          const dataUrl = canvas.toDataURL(mimeType, 1.0);
           resolve({ data: dataUrl, mimeType, preview: dataUrl });
         };
         img.onerror = () => reject(new Error("Rasmni yuklashda xatolik"));
@@ -163,6 +165,20 @@ const App: React.FC = () => {
 
       // Send result to backend
       sendResultToBackend(text, image.preview);
+
+      // Save to Local Storage
+      try {
+        const newItem = {
+          id: Date.now().toString(),
+          text: text,
+          imagePreview: image.preview,
+          date: new Date().toISOString()
+        };
+        const existingHistory = JSON.parse(localStorage.getItem('ocr_history') || '[]');
+        localStorage.setItem('ocr_history', JSON.stringify([newItem, ...existingHistory]));
+      } catch (storageErr) {
+        console.warn('LocalStorage ga saqlashda xatolik:', storageErr);
+      }
     } catch (err: any) {
       const msg = err?.message || "";
       console.error("Processing error:", err);
@@ -314,6 +330,15 @@ const App: React.FC = () => {
         </div>
       )}
     </div>
+  );
+};
+
+const App: React.FC = () => {
+  return (
+    <Routes>
+      <Route path="/" element={<Home />} />
+      <Route path="/admin" element={<Admin />} />
+    </Routes>
   );
 };
 
